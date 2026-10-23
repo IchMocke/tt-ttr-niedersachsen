@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 import requests
 
 # Deine Liga-URL:
-SCHEDULE_URL = "https://ttvn.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/groupPage?championship=KV+GS+26%2F27&group=525439"
+SCHEDULE_URL = "https://ttvn.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/groupPage?displayTyp=gesamt&displayDetail=meetings&championship=KV+GS+26%2F27&group=525439"
 
 BASE_URL = "https://ttvn.click-tt.de"
 HEADERS = {
