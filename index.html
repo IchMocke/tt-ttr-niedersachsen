@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TTR-Rangliste Live</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f8fafc; padding: 2rem; color: #0f172a; margin: 0; }
+    .card { max-width: 800px; margin: 0 auto; background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    h1 { font-size: 1.3rem; margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { padding: 0.6rem; border-bottom: 1px solid #e2e8f0; text-align: left; font-size: 0.9rem; }
+    th { background: #f1f5f9; }
+    .pos { color: #16a34a; font-weight: bold; }
+    .neg { color: #dc2626; font-weight: bold; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Tagesaktuelle TTR-Rangliste (TTVN)</h1>
+  <p id="updated" style="font-size: 0.85rem; color: #64748b;">Lade Daten...</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Spieler</th>
+        <th>Start-QTTR</th>
+        <th>Aktueller TTR</th>
+        <th>Diff</th>
+        <th>Spiele</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+  fetch('data.json')
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById('updated').textContent = 'Stand: ' + data.lastUpdated;
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+      data.ranking.forEach(p => {
+        const sign = p.diff > 0 ? '+' : '';
+        const cls = p.diff >= 0 ? 'pos' : 'neg';
+        tbody.innerHTML += `
+          <tr>
+            <td><strong>${p.name}</strong></td>
+            <td>${p.qttr}</td>
+            <td><strong>${p.currentTtr}</strong></td>
+            <td class="${cls}">${sign}${p.diff}</td>
+            <td>${p.matches}</td>
+          </tr>
+        `;
+      });
+    })
+    .catch(() => {
+      document.getElementById('updated').textContent = 'Noch keine Daten vorhanden (Erster Lauf ausstehend).';
+    });
+</script>
+</body>
+</html>
