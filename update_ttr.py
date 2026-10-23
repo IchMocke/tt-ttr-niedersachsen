@@ -7,7 +7,7 @@ import requests
 
 SCHEDULE_URL = "https://ttvn.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/groupPage?displayTyp=gesamt&displayDetail=meetings&championship=KV+GS+26%2F27&group=525439"
 
-BASE_URL = "https://www.ttvn.de"
+BASE_URL = "https://ttvn.click-tt.de"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
