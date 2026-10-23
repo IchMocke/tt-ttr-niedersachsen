@@ -5,7 +5,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import requests
 
-SCHEDULE_URL = "HIER_DEINE_GESAMTSPIELPLAN_URL_EINTRAGEN"
+SCHEDULE_URL = "https://ttvn.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/groupPage?displayTyp=gesamt&displayDetail=meetings&championship=KV+GS+26%2F27&group=525439"
 
 BASE_URL = "https://www.ttvn.de"
 HEADERS = {
