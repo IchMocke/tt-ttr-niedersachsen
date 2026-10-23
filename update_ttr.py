@@ -6,7 +6,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 
 # HIER DIE URL DEINER LIGA EINTRAGEN:
-SCHEDULE_URL = "https://ttvn.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/groupPage?championship=..."
+SCHEDULE_URL = "https://ttvn.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/groupPage?championship=KV+GS+26%2F27&group=525439"
 
 BASE_URL = "https://ttvn.click-tt.de"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
