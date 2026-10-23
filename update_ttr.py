@@ -1,7 +1,43 @@
+import json
+import math
+import re
+from datetime import datetime
+from bs4 import BeautifulSoup
+import requests
+
+SCHEDULE_URL = "HIER_DEINE_GESAMTSPIELPLAN_URL_EINTRAGEN"
+
+BASE_URL = "https://www.ttvn.de"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+def fetch_html(url):
+    resp = requests.get(url, headers=HEADERS, timeout=20)
+    resp.raise_for_status()
+    return resp.text
+
+def get_finished_meeting_urls(schedule_html):
+    soup = BeautifulSoup(schedule_html, "html.parser")
+    meeting_urls = []
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if any(key in href for key in ["meeting", "federationMeeting", "meetingReport"]):
+            link_text = a.get_text().strip()
+            row = a.find_parent("tr")
+            row_text = row.get_text() if row else ""
+
+            if re.search(r"\b\d+\s*:\s*\d+\b", link_text) or re.search(r"\b\d+\s*:\s*\d+\b", row_text):
+                full_url = href if href.startswith("http") else (BASE_URL + href if href.startswith("/") else BASE_URL + "/" + href)
+                if full_url not in meeting_urls:
+                    meeting_urls.append(full_url)
+
+    return meeting_urls
+
 def parse_meeting(meeting_html):
     soup = BeautifulSoup(meeting_html, "html.parser")
 
-    # Spieldatum ermitteln
     date_str = "2026-01-01"
     date_match = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", soup.get_text())
     if date_match:
@@ -9,7 +45,6 @@ def parse_meeting(meeting_html):
 
     matches = []
 
-    # Alle Tabellenzeilen des Spielberichts durchsuchen
     for row in soup.find_all("tr"):
         cells = row.find_all(["td", "th"])
         if len(cells) < 6:
@@ -17,12 +52,9 @@ def parse_meeting(meeting_html):
 
         row_text = row.get_text(" ", strip=True)
 
-        # Doppel explizit überspringen (D1, D2, DA, DB oder Wort "Doppel")
         if re.search(r"\b(D[1-3]|DA[1-2]|DB[1-2]|Doppel)\b", row_text, re.IGNORECASE):
             continue
 
-        # Satzverhältnis suchen: 3:0, 3:1, 3:2 bzw. 0:3, 1:3, 2:3
-        # In click-TT steht das Gesamtsatzergebnis in einer der hinteren Spalten
         score_match = None
         for cell in reversed(cells):
             txt = cell.get_text(strip=True)
@@ -38,10 +70,7 @@ def parse_meeting(meeting_html):
 
         s_a, s_b = score_match
 
-        # Spieler ermitteln:
-        # Zunächst prüfen, ob Spieler als Links hinterlegt sind
         links = row.find_all("a")
-        # Relevante Spieler-Links filtern (enthalten oft playerPortrait oder federationPerson)
         player_candidates = [
             a.get_text(strip=True) for a in links
             if len(a.get_text(strip=True)) > 3 and not re.match(r"^(\d+|[A-Z]\d+)$", a.get_text(strip=True))
@@ -49,26 +78,22 @@ def parse_meeting(meeting_html):
 
         p_a, p_b = None, None
         if len(player_candidates) >= 2:
-            p_a, p_b = player_candidates[3], player_candidates[3]
+            p_a, p_b = player_candidates[0], player_candidates[1]
         else:
-            # Fallback: Aus den Textspalten lesen (Heimspieler meist Spalte 2/3, Gast Spalte 3/4)
             text_candidates = []
             for c in cells:
                 val = c.get_text(strip=True)
-                # Nur Zellen werten, die Namen sein können (keine reinen Zahlen, keine Satzstände wie 11:8)
                 if len(val) >= 4 and not re.search(r"\d", val) and ":" not in val:
                     text_candidates.append(val)
             if len(text_candidates) >= 2:
-                p_a, p_b = text_candidates[3], text_candidates[3]
+                p_a, p_b = text_candidates[0], text_candidates[1]
 
         if not p_a or not p_b:
             continue
 
-        # Doppelpaare im Textformat (z. B. "Müller / Meier") überspringen
         if "/" in p_a or "/" in p_b:
             continue
 
-        # Bereinigung (z. B. "1.1 Name" oder Leerzeichen)
         p_a = re.sub(r"^\d+[\.\s]+", "", p_a).strip()
         p_b = re.sub(r"^\d+[\.\s]+", "", p_b).strip()
 
@@ -81,3 +106,77 @@ def parse_meeting(meeting_html):
         })
 
     return matches
+
+def run_replay(all_matches, baselines):
+    players = {}
+
+    def get_player(name):
+        if name not in players:
+            base = baselines.get(name, 1500)
+            players[name] = {"name": name, "qttr": base, "currentTtr": base, "matches": 0}
+        return players[name]
+
+    all_matches.sort(key=lambda x: x["date"])
+
+    for m in all_matches:
+        p_a = get_player(m["playerA"])
+        p_b = get_player(m["playerB"])
+
+        exp = (p_b["currentTtr"] - p_a["currentTtr"]) / 150.0
+        prob_a = 1.0 / (1.0 + math.pow(10, exp))
+        prob_b = 1.0 - prob_a
+
+        act_a = 1.0 if m["winner"] == m["playerA"] else 0.0
+        act_b = 1.0 - act_a
+
+        delta_a = round((act_a - prob_a) * 16)
+        delta_b = round((act_b - prob_b) * 16)
+
+        p_a["currentTtr"] += delta_a
+        p_b["currentTtr"] += delta_b
+        p_a["matches"] += 1
+        p_b["matches"] += 1
+
+    ranking = list(players.values())
+    for p in ranking:
+        p["diff"] = p["currentTtr"] - p["qttr"]
+    ranking.sort(key=lambda x: x["currentTtr"], reverse=True)
+    return ranking
+
+def main():
+    baselines = {}
+    try:
+        with open("player_baselines.json", "r", encoding="utf-8") as f:
+            baselines = json.load(f)
+    except FileNotFoundError:
+        print("player_baselines.json nicht gefunden, Fallbacks aktiv.")
+
+    print(f"Lade Spielplan: {SCHEDULE_URL}")
+    schedule_html = fetch_html(SCHEDULE_URL)
+    meeting_urls = get_finished_meeting_urls(schedule_html)
+    print(f"{len(meeting_urls)} Spielberichte gefunden.")
+
+    all_matches = []
+    for url in meeting_urls:
+        print(f"Lade Bericht: {url}")
+        try:
+            html = fetch_html(url)
+            parsed = parse_meeting(html)
+            print(f"  -> {len(parsed)} Einzelpartien gefunden.")
+            all_matches.extend(parsed)
+        except Exception as e:
+            print(f"  Fehler bei {url}: {e}")
+
+    print(f"Gesamt: {len(all_matches)} Einzelpartien erfasst. Berechne TTR-Replay...")
+    ranking = run_replay(all_matches, baselines)
+
+    output = {
+        "lastUpdated": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "ranking": ranking
+    }
+    with open("ttr_data.json", "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+    print("ttr_data.json erfolgreich erzeugt.")
+
+if __name__ == "__main__":
+    main()
